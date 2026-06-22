@@ -6,7 +6,7 @@
 - 日志: ~/.hermes/logs/feishu-quiz/YYYY-MM-DD.log
 """
 
-import os, sys, json, time, re, subprocess
+import os, sys, json, time, re, subprocess, signal
 from datetime import datetime
 
 # ── Config ──────────────────────────────────────────────────
@@ -14,6 +14,7 @@ FEISHU_GROUP = "正泰安能户用光伏党支部"
 CHROME_APP = "Google Chrome"
 FORM_URL = "https://chintsso.feishu.cn/share/base/form/shrcnawUqcbQpUCI6mzv61wpatd"
 DEADLINE_HOUR = 16
+JS_TIMEOUT_SECONDS = 20
 LOG_DIR = os.path.expanduser("~/.hermes/logs/feishu-quiz")
 STATE_FILE = os.path.expanduser("~/.hermes/cache/feishu-quiz-state.json")
 
@@ -380,12 +381,25 @@ def submit_answer_in_chrome(backend, answer):
     def js(code):
         """Run JavaScript in the form page, return parsed result.
         Returns (parsed_value, raw_string, is_error)."""
-        r = backend._session.call_tool("page", {
-            "action": "execute_javascript",
-            "pid": pid,
-            "window_id": wid,
-            "javascript": code
-        })
+        def _on_timeout(signum, frame):
+            raise TimeoutError("Chrome JavaScript execution timed out")
+
+        old_handler = signal.signal(signal.SIGALRM, _on_timeout)
+        signal.alarm(JS_TIMEOUT_SECONDS)
+        try:
+            r = backend._session.call_tool("page", {
+                "action": "execute_javascript",
+                "pid": pid,
+                "window_id": wid,
+                "javascript": code
+            })
+        except TimeoutError as e:
+            log(f"❌ {e} after {JS_TIMEOUT_SECONDS}s", "ERROR")
+            return None, str(e), True
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, old_handler)
+
         raw = r.get("data", "")
         # Detect Chrome JS permission errors
         if isinstance(raw, str):

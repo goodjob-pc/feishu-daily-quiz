@@ -10,32 +10,23 @@ from unittest.mock import MagicMock, patch, PropertyMock
 
 # Setup
 sys.path.insert(0, os.path.expanduser("~/.hermes/scripts"))
-os.environ["HERMES_CUA_DRIVER_CMD"] = "/usr/bin/true"  # dummy
+os.environ.setdefault("HERMES_CUA_DRIVER_CMD", "/Users/pc/.local/bin/cua-driver")
 
 # Import the actual module
 import importlib.util
+SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "feishu-daily-quiz.py")
 spec = importlib.util.spec_from_file_location(
-    "feishu_daily_quiz", 
-    os.path.expanduser("~/.hermes/scripts/feishu-daily-quiz.py")
+    "feishu_daily_quiz",
+    SCRIPT_PATH
 )
 quiz = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(quiz)
 
 # ── Helpers for tests ────────────────────────────────────────
 
 def _find_element_by_label(text, label, element_types=None):
-    """Direct copy of the real function for testing."""
-    if element_types is None:
-        element_types = ["AXStaticText", "AXMenuItem", "AXCell", "AXButton", "AXMenuBarItem"]
-    escaped = re.escape(label)
-    for et in element_types:
-        pattern = rf"\[\s*(\d+)\s*\].*{et}.*[\"=]([^\"]*{escaped}[^\"]*)[\"]"
-        for m in re.finditer(pattern, text):
-            return int(m.group(1))
-    pattern = rf"\[\s*(\d+)\s*\][^\[]*{escaped}"
-    m = re.search(pattern, text)
-    if m:
-        return int(m.group(1))
-    return None
+    """Call the real implementation from feishu-daily-quiz.py."""
+    return quiz._find_element_by_label(text, label, element_types)
 
 
 class FakeSession:
@@ -393,6 +384,22 @@ class TestChromeJSErrorDetection(unittest.TestCase):
         normal = "clicked 1 tag(s)"
         is_window_error = "不能获得" in normal and "window" in normal
         self.assertFalse(is_window_error)
+
+    def test_submit_returns_false_when_js_times_out(self):
+        """A hung Chrome JS call should fail fast instead of blocking retries."""
+        import time
+
+        class SlowSession:
+            def call_tool(self, name, args):
+                time.sleep(2)
+                return make_page_response({"isDone": False})
+
+        class SlowBackend:
+            _session = SlowSession()
+
+        with patch.object(quiz, "find_chrome_form_window", return_value=(123, 456)):
+            with patch.object(quiz, "JS_TIMEOUT_SECONDS", 1):
+                self.assertFalse(quiz.submit_answer_in_chrome(SlowBackend(), "A"))
 
 
 class TestAnswerNearQuestionLogic(unittest.TestCase):
