@@ -1,6 +1,6 @@
 # 飞书每日答题自动化
 
-> 版本 1.0 | 2026-06-21 | macOS 专属
+> 版本 1.1 | 2026-06-21 | macOS 专属
 
 ## 1. 需求概述
 
@@ -81,6 +81,7 @@ exit 3 = 前置完成但提交失败 (保留 state, 60秒后快速重试)
 - 点击"提交"按钮（精确匹配 `===`，避免误匹配"查看提交记录"）
 - 验证结果（"提交成功" 或 "已达提交次数上限"）
 - 成功后 `window.close()` 关闭标签页
+- **JS 超时保护**：每次 JS 调用包裹 SIGALRM 20s 超时，防止 Chrome 卡死阻塞重试循环
 
 #### 2.3.5 Shell 重试逻辑
 
@@ -100,10 +101,10 @@ exit 3 = 前置完成但提交失败 (保留 state, 60秒后快速重试)
 
 | 文件 | 行数 | 说明 |
 |------|------|------|
-| `feishu-daily-quiz.py` | 642 | 主脚本：三阶段执行 + 断点续跑 |
+| `feishu-daily-quiz.py` | 658 | 主脚本：三阶段执行 + 断点续跑 + JS 超时保护 |
 | `feishu-daily-quiz.sh` | 64 | Shell wrapper：随机延迟 + 重试循环 (最多 14 次) |
 | `feishu-quiz-now.sh` | 5 | 手动立即触发（无延迟） |
-| `test_feishu_quiz.py` | 449 | 单元测试 + 集成测试 (18 个用例) |
+| `test_feishu_quiz.py` | 463 | 单元测试 + 集成测试 (19 个用例) |
 
 ### 环境变量
 
@@ -138,9 +139,9 @@ python3 test_feishu_quiz.py
 | `TestElementFinding` | 5 | AX 元素索引查找：MenuBarItem、MenuItem、跨类型搜索 |
 | `TestPhase3SubmitLogic` | 5 | 表单 JS 交互：已提交检测、标签选择、提交按钮精确匹配 |
 | `TestPhase3Integration` | 2 | 完整提交流程模拟、已提交短路 |
-| `TestChromeJSErrorDetection` | 3 | JS 权限错误、窗口未就绪、正常返回不误判 |
+| `TestChromeJSErrorDetection` | 4 | JS 权限错误、窗口未就绪、正常返回不误判、JS 超时保护 |
 | `TestAnswerNearQuestionLogic` | 3 | 答案在搜索窗口内/外/前 |
-| **总计** | **18+1** | **+1 pre-flight 权限探测（需真实环境）** |
+| **总计** | **19+1** | **+1 pre-flight 权限探测（需真实环境）** |
 
 ---
 
