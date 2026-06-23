@@ -179,6 +179,8 @@ Deliver:   all (推送到所有已连接平台)
 bash ~/.hermes/scripts/feishu-quiz-now.sh
 ```
 
+Windows MVP documentation lives in [`windows/README_WINDOWS.md`](windows/README_WINDOWS.md).
+
 ---
 
 ## 6. 已知问题与约束
