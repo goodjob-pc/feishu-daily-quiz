@@ -137,6 +137,71 @@ def preflight(config: Config, system_name=None, check_imports=True):
     return True, "ok"
 
 
+def is_form_url(url: str, config: Config) -> bool:
+    return bool(url and config.form_url_marker in url)
+
+
+def build_form_state_js() -> str:
+    return (
+        "JSON.stringify({"
+        "isDone:!!(document.body?.innerText||'').match(/提交成功|已达提交次数上限/),"
+        "hasSelect:!!document.querySelector('select'),"
+        "hasTags:!!document.querySelector('.ud__tag'),"
+        "submitBtn:!!([...document.querySelectorAll('button')]"
+        ".find(b=>b.textContent.trim()==='提交'&&!b.disabled)),"
+        "url:location.href,"
+        "text:(document.body?.innerText||'').substring(0,200)"
+        "})"
+    )
+
+
+def build_submit_js(answer: str) -> str:
+    option_index = {"A": 0, "B": 1, "C": 2, "D": 3}[answer]
+    return (
+        "var state={};"
+        "var s=document.querySelector('select');"
+        f"if(s){{s.selectedIndex={option_index};s.dispatchEvent(new Event('change',{{bubbles:true}}));state.selected='select';}}"
+        "else{"
+        f"var tags=[...document.querySelectorAll('.ud__tag')].filter(d=>d.textContent.trim()==='{answer}');"
+        "if(tags.length){tags[0].click();state.selected='tag';}"
+        "else{state.error='answer option not found';}"
+        "}"
+        "if(!state.error){"
+        "var b=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='提交'&&!x.disabled);"
+        "if(b){b.click();state.submitted=true;}else{state.error='submit button not found';}"
+        "}"
+        "JSON.stringify(state)"
+    )
+
+
+def submit_answer_in_browser(config: Config, answer: str):
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception as exc:
+        raise RuntimeError(f"Playwright is not available: {exc}") from exc
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(channel=config.browser_channel, headless=False)
+        try:
+            pages = []
+            for context in browser.contexts:
+                pages.extend(context.pages)
+            for page in pages:
+                if is_form_url(page.url, config):
+                    state = json.loads(page.evaluate(build_form_state_js()))
+                    if state.get("isDone"):
+                        return True
+                    result = json.loads(page.evaluate(build_submit_js(answer)))
+                    if result.get("error"):
+                        return False
+                    time.sleep(2)
+                    verify_text = page.evaluate("document.body?.innerText||''")
+                    return "提交成功" in verify_text or "已达提交次数上限" in verify_text
+            return False
+        finally:
+            browser.close()
+
+
 def main(argv=None):
     args = parse_args(argv)
     config_path = Path(args.config)

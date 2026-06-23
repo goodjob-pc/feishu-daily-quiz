@@ -125,5 +125,29 @@ class TestCliAndPreflight(unittest.TestCase):
             self.assertIn("Windows", reason)
 
 
+class TestBrowserHelpers(unittest.TestCase):
+    def test_is_form_url_requires_marker(self):
+        config = quiz.Config(
+            feishu_group="正泰安能户用光伏党支部",
+            deadline_hour=16,
+            browser="chrome",
+            browser_channel="chrome",
+            log_dir=Path("logs"),
+            state_file=Path("state.json"),
+            random_delay_seconds=60,
+            answer_search_window_chars=2000,
+            js_timeout_seconds=20,
+            form_url_marker="feishu.cn/share/base/form",
+        )
+        self.assertTrue(quiz.is_form_url("https://chintsso.feishu.cn/share/base/form/abc", config))
+        self.assertFalse(quiz.is_form_url("https://example.com/答题", config))
+
+    def test_submit_js_uses_exact_submit_text(self):
+        js = quiz.build_submit_js("C")
+        self.assertIn("textContent.trim()==='提交'", js)
+        self.assertNotIn("includes('提交')", js)
+        self.assertIn(".ud__tag", js)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
