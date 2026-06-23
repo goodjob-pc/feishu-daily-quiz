@@ -1,0 +1,12 @@
+{
+  "feishu_group": "正泰安能户用光伏党支部",
+  "deadline_hour": 16,
+  "browser": "chrome",
+  "browser_channel": "chrome",
+  "log_dir": "%LOCALAPPDATA%\\FeishuDailyQuiz\\logs",
+  "state_file": "%LOCALAPPDATA%\\FeishuDailyQuiz\\state.json",
+  "random_delay_seconds": 60,
+  "answer_search_window_chars": 2000,
+  "js_timeout_seconds": 20,
+  "form_url_marker": "feishu.cn/share/base/form"
+}
