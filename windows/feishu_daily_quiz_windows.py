@@ -104,3 +104,59 @@ def extract_answer_from_text(text: str, today: date, window_chars: int = 2000):
         if match:
             return match.group(1)
     return None
+
+
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description="Windows Feishu daily quiz automation")
+    parser.add_argument("--config", default="config.json")
+    parser.add_argument("--preflight", action="store_true")
+    parser.add_argument("--phase", choices=["all", "answer", "open-form", "submit"], default="all")
+    parser.add_argument("--answer", choices=["A", "B", "C", "D"])
+    parser.add_argument("--dump-uia", action="store_true")
+    return parser.parse_args(argv)
+
+
+def preflight(config: Config, system_name=None, check_imports=True):
+    system_name = system_name or platform.system()
+    if system_name != "Windows":
+        return False, f"Windows is required, got {system_name}"
+    try:
+        config.log_dir.mkdir(parents=True, exist_ok=True)
+        config.state_file.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        return False, f"Cannot create log/state directory: {exc}"
+    if check_imports:
+        try:
+            import uiautomation  # noqa: F401
+        except Exception as exc:
+            return False, f"Missing uiautomation dependency: {exc}"
+        try:
+            import playwright.sync_api  # noqa: F401
+        except Exception as exc:
+            return False, f"Missing playwright dependency: {exc}"
+    return True, "ok"
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    config_path = Path(args.config)
+    try:
+        config = load_config(config_path)
+    except Exception as exc:
+        print(f"FATAL: {exc}", file=sys.stderr)
+        return EXIT_FATAL
+
+    ok, reason = preflight(config)
+    if args.preflight:
+        log(config, f"Preflight: {reason}", "SUCCESS" if ok else "FATAL")
+        return EXIT_SUCCESS if ok else EXIT_FATAL
+    if not ok:
+        log(config, f"Preflight failed: {reason}", "FATAL")
+        return EXIT_FATAL
+
+    log(config, "Windows implementation skeleton is ready; UI automation not executed yet")
+    return EXIT_RETRYABLE
+
+
+if __name__ == "__main__":
+    sys.exit(main())

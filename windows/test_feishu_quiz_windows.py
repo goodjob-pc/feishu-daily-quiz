@@ -100,5 +100,30 @@ class TestAnswerExtraction(unittest.TestCase):
         )
 
 
+class TestCliAndPreflight(unittest.TestCase):
+    def test_parse_args_accepts_phase_submit_answer(self):
+        args = quiz.parse_args(["--phase", "submit", "--answer", "C"])
+        self.assertEqual(args.phase, "submit")
+        self.assertEqual(args.answer, "C")
+
+    def test_preflight_rejects_non_windows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = quiz.Config(
+                feishu_group="正泰安能户用光伏党支部",
+                deadline_hour=16,
+                browser="chrome",
+                browser_channel="chrome",
+                log_dir=Path(tmp) / "logs",
+                state_file=Path(tmp) / "state.json",
+                random_delay_seconds=60,
+                answer_search_window_chars=2000,
+                js_timeout_seconds=20,
+                form_url_marker="feishu.cn/share/base/form",
+            )
+            ok, reason = quiz.preflight(config, system_name="Darwin", check_imports=False)
+            self.assertFalse(ok)
+            self.assertIn("Windows", reason)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
