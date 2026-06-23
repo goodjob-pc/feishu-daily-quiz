@@ -71,7 +71,7 @@ exit 3 = 前置完成但提交失败 (保留 state, 60秒后快速重试)
 
 策略：
 - 优先：找到今日 `YYYY/MM/DD 每日一题来啦` → 搜索前后 2000 字符
-- 兜底：取 AX Tree 中最后一个匹配（聊天预览顶部 = 最近消息）
+- 若只有无日期答案候选，视为答案未发布，避免误提交历史答案
 
 #### 2.3.4 Chrome 表单交互
 
@@ -85,9 +85,10 @@ exit 3 = 前置完成但提交失败 (保留 state, 60秒后快速重试)
 
 #### 2.3.5 Shell 重试逻辑
 
-- 08:00 触发，随机延迟 0~15 分钟（避免被检测为机器人）
+- 08:00 触发，随机延迟 0~60 秒（避免所有重试同时启动）
 - exit 2（答案未发布）→ 等待 30 分钟
 - exit 3（提交失败）→ 等待 60 秒
+- exit 1（致命错误）→ 停止重试
 - 超过 16:00 → 放弃
 - 连续失败 >5 次 → 输出醒目告警
 
@@ -116,7 +117,6 @@ exit 3 = 前置完成但提交失败 (保留 state, 60秒后快速重试)
 
 ```python
 FEISHU_GROUP = "正泰安能户用光伏党支部"
-FORM_URL = "https://chintsso.feishu.cn/share/base/form/shrcnawUqcbQpUCI6mzv61wpatd"
 DEADLINE_HOUR = 16
 ```
 
@@ -135,13 +135,14 @@ python3 test_feishu_quiz.py
 
 | 测试类 | 用例数 | 覆盖范围 |
 |--------|--------|---------|
-| `TestAnswerExtraction` | 6 | 正则匹配：中文/英文冒号、多余空格、误匹配防护、临近搜索 |
+| `TestAnswerExtraction` | 7 | 正则匹配：中文/英文冒号、多余空格、误匹配防护、临近搜索、历史答案防护 |
 | `TestElementFinding` | 5 | AX 元素索引查找：MenuBarItem、MenuItem、跨类型搜索 |
-| `TestPhase3SubmitLogic` | 5 | 表单 JS 交互：已提交检测、标签选择、提交按钮精确匹配 |
+| `TestPhase3SubmitLogic` | 6 | 表单 JS 交互：已提交检测、标签选择、提交按钮精确匹配、Chrome 窗口防误匹配 |
 | `TestPhase3Integration` | 2 | 完整提交流程模拟、已提交短路 |
 | `TestChromeJSErrorDetection` | 4 | JS 权限错误、窗口未就绪、正常返回不误判、JS 超时保护 |
 | `TestAnswerNearQuestionLogic` | 3 | 答案在搜索窗口内/外/前 |
-| **总计** | **19+1** | **+1 pre-flight 权限探测（需真实环境）** |
+| `TestShellRetryContract` | 1 | exit 1 致命错误不重试 |
+| **总计** | **29** | **含 1 个 pre-flight 权限探测（需真实环境）** |
 
 ---
 

@@ -66,7 +66,7 @@
                   ▼
 ┌─────────────────────────────────────────────┐
 │  feishu-daily-quiz.sh                        │
-│  ├─ 随机延迟 0~900s                           │
+│  ├─ 随机延迟 0~60s                            │
 │  ├─ 循环重试 (最多 14 次)                      │
 │  │   ├─ exit 2 → sleep 1800s (答案未发布)     │
 │  │   ├─ exit 3 → sleep 60s   (提交失败)       │
@@ -169,7 +169,6 @@ state.json 结构:
 
 ```python
 FEISHU_GROUP = "正泰安能户用光伏党支部"     # 群名（用于 AX 匹配）
-FORM_URL = "https://chintsso.feishu.cn/..."  # 答题表单（SSO 保护）
 DEADLINE_HOUR = 16                            # 截止时间
 JS_TIMEOUT_SECONDS = 20                       # Chrome JS 超时
 ```
@@ -297,7 +296,7 @@ Deliver:  all              # 推送到所有已连接平台（需 /sethome）
 | 1 | cua-driver Accessibility 权限 | `python3 test_feishu_quiz.py TestAnswerExtraction.test_preflight_permissions` | Phase 1/2 无法工作 |
 | 2 | Chrome "允许 Apple 事件中的 JavaScript" | 手动：Chrome → 查看 → 开发者 → 勾选 | Phase 3 无法工作 |
 | 3 | 飞书已登录，目标群在最近聊天 | 打开飞书确认群聊可见 | 导航失败（Cmd+K 兜底） |
-| 4 | Chrome `chintsso.feishu.cn` 已 SSO 登录 | 手动访问 FORM_URL 确认 | 表单打开后可能显示登录页 |
+| 4 | Chrome `chintsso.feishu.cn` 已 SSO 登录 | 从飞书群点击"前去答题"确认可进入表单 | 表单打开后可能显示登录页 |
 
 ### 5.3 日志与监控
 
@@ -354,7 +353,7 @@ rm ~/.hermes/cache/feishu-quiz-state.json
 | 🟢 P2 | 多群支持 | 支持多个飞书群各自答题（当前仅一个群） | 中 |
 | 🟢 P2 | 状态通知增强 | 区分更多失败原因：登录态过期 vs UI 变更 vs 网络问题 | 小 |
 | 🔵 P3 | Windows 移植 | 使用 Win32 Accessibility API 替代 macOS AX | 大 |
-| 🔵 P3 | 配置外置 | `FEISHU_GROUP`、`FORM_URL` 等从配置文件读取 | 小 |
+| 🔵 P3 | 配置外置 | `FEISHU_GROUP`、截止时间等从配置文件读取 | 小 |
 
 ---
 
@@ -379,7 +378,7 @@ bash ~/.hermes/scripts/feishu-quiz-now.sh
 ### A.3 Phase 3 失败（Chrome JS 无响应）
 
 1. 检查 Chrome → 查看 → 开发者 → **允许 Apple 事件中的 JavaScript** 是否勾选
-2. 手动访问 `https://chintsso.feishu.cn/share/base/form/shrcnawUqcbQpUCI6mzv61wpatd` 确认登录态
+2. 从飞书群手动点击"前去答题"，确认 Chrome 能进入表单且未停在登录页
 3. 如果页面显示登录页 → 手动登录一次
 
 ### A.4 重置断点

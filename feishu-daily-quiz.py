@@ -2,7 +2,7 @@
 """
 飞书每日答题自动化脚本
 - 从飞书群读取答案 → 浏览器填表提交
-- 每天 9:00 自动运行, 失败每 30 分钟重试到 16:00
+- 每天 08:00 自动运行, 失败每 30 分钟重试到 16:00
 - 日志: ~/.hermes/logs/feishu-quiz/YYYY-MM-DD.log
 """
 
@@ -12,7 +12,6 @@ from datetime import datetime
 # ── Config ──────────────────────────────────────────────────
 FEISHU_GROUP = "正泰安能户用光伏党支部"
 CHROME_APP = "Google Chrome"
-FORM_URL = "https://chintsso.feishu.cn/share/base/form/shrcnawUqcbQpUCI6mzv61wpatd"
 DEADLINE_HOUR = 16
 JS_TIMEOUT_SECONDS = 20
 LOG_DIR = os.path.expanduser("~/.hermes/logs/feishu-quiz")
@@ -223,15 +222,11 @@ def find_answer_in_feishu(backend):
             log(f"  Question at pos {pos}, answer at offset {answer_match.start()}")
             return answer
     
-    # Fallback: find the chronologically last answer for today
-    # In chat list preview, today's answer typically appears near "08:" or "07:" timestamps
-    # with the format: "每日一题 今日答案：X"
+    # Do not use undated fallback answers: stale chat previews can contain
+    # yesterday's answer and would cause an irreversible wrong submission.
     answers = list(re.finditer(r"每日一题\s+今日答案[：:]\s*([A-D])(?!\d)", text))
     if answers:
-        # Take the last one (most recent in the tree = closest to top of chat)
-        answer = answers[-1].group(1)
-        log(f"✅ Found answer (last in tree): {answer}", "SUCCESS")
-        return answer
+        log(f"Found {len(answers)} undated answer candidate(s); ignoring until today's question is visible", "WARN")
     
     for m in re.finditer(r"每日一题[^\n]*", text):
         log(f"  DEBUG match: {m.group()[:120]}")
@@ -333,10 +328,6 @@ def find_chrome_form_window(backend):
         pid = w["pid"]
         wid = w["window_id"]
         
-        if "答题" in title or "答题卡" in title:
-            log(f"  Found by title: '{title[:60]}' pid={pid} wid={wid}")
-            return pid, wid
-        
         try:
             r = backend._session.call_tool("get_window_state", {
                 "pid": pid, "window_id": wid, "include_screenshot": False
@@ -345,6 +336,8 @@ def find_chrome_form_window(backend):
             if "feishu.cn/share/base/form" in text:
                 log(f"  Found by URL: pid={pid} wid={wid}")
                 return pid, wid
+            if "答题" in title or "答题卡" in title:
+                log(f"  Title looks relevant but URL not confirmed: '{title[:60]}' pid={pid} wid={wid}", "WARN")
         except Exception as e:
             log(f"  (skipping pid={pid}: {e})")
         

@@ -48,6 +48,10 @@ for i in $(seq 1 $MAX_RETRIES); do
     elif [ $EXIT_CODE -eq 3 ]; then
         echo "📬 飞书答题 | ⚠️ 重试 | $(date '+%H:%M') | 前置完成，60 秒后第 $((i+1)) 次尝试"
         sleep 60
+    elif [ $EXIT_CODE -eq 1 ]; then
+        echo "📬 飞书答题 | ❌ 致命错误 | $(date '+%H:%M') | exit=1，停止重试"
+        rm -f "$STATE_FILE"
+        exit 1
     else
         # Consecutive failures > 5 trigger an alert
         if [ $i -gt 5 ]; then

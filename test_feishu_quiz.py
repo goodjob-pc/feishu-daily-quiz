@@ -168,6 +168,35 @@ class TestAnswerExtraction(unittest.TestCase):
         self.assertIsNotNone(answer_match)
         self.assertEqual(answer_match.group(1), "B")
 
+    def test_find_answer_does_not_use_undated_history_fallback(self):
+        """Historical answers without today's question should not be used."""
+        yesterday_answer_only = (
+            '- [37] AXStaticText = "08:10" []\n'
+            '- [39] AXStaticText = "每日一题 今日答案：B" []\n'
+        )
+
+        class Session:
+            def __init__(self):
+                self.states = [
+                    {"data": '- [148] AXMenuBarItem "历史记录" []\n'},
+                    {"data": '- [1] AXStaticText "history opened" []\n'},
+                    {"data": yesterday_answer_only},
+                ]
+
+            def call_tool(self, name, args):
+                if name == "list_windows":
+                    return {"structuredContent": {
+                        "windows": [{"app_name": "飞书", "title": "飞书", "pid": 1, "window_id": 2}]
+                    }}
+                if name == "get_window_state":
+                    return self.states.pop(0)
+                return {"data": ""}
+
+        class Backend:
+            _session = Session()
+
+        self.assertIsNone(quiz.find_answer_in_feishu(Backend()))
+
 
 class TestElementFinding(unittest.TestCase):
     """Phase 1: _find_element_by_label function."""
@@ -260,6 +289,36 @@ class TestPhase3SubmitLogic(unittest.TestCase):
         )
         self.assertIn("提交成功", js)
         self.assertIn("已达提交次数上限", js)
+
+    def test_chrome_window_title_alone_is_not_enough(self):
+        """A Chrome tab titled 答题 must still expose the Feishu form URL."""
+        class Session:
+            def call_tool(self, name, args):
+                if name == "list_windows":
+                    return {"structuredContent": {
+                        "windows": [{"app_name": "Google Chrome", "title": "答题", "pid": 10, "window_id": 20}]
+                    }}
+                if name == "get_window_state":
+                    return {"data": '- [1] AXStaticText = "not the form" []'}
+                return {"data": ""}
+
+        class Backend:
+            _session = Session()
+
+        self.assertEqual(quiz.find_chrome_form_window(Backend()), (None, None))
+
+
+class TestShellRetryContract(unittest.TestCase):
+    """Shell wrapper exit-code behavior."""
+
+    def test_exit_1_is_fatal_and_not_retried(self):
+        with open(os.path.join(os.path.dirname(__file__), "feishu-daily-quiz.sh")) as f:
+            script = f.read()
+        self.assertIn("elif [ $EXIT_CODE -eq 1 ]", script)
+        self.assertLess(
+            script.index("elif [ $EXIT_CODE -eq 1 ]"),
+            script.index("else\n        # Consecutive failures"),
+        )
 
 
 # ── Integration Test ─────────────────────────────────────────
