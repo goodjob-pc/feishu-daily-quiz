@@ -202,6 +202,117 @@ def submit_answer_in_browser(config: Config, answer: str):
             browser.close()
 
 
+class WindowsFeishuClient:
+    def __init__(self, config: Config):
+        self.config = config
+
+    def activate_group(self, group: str) -> bool:
+        try:
+            import uiautomation as auto
+        except Exception as exc:
+            raise RuntimeError(f"uiautomation is not available: {exc}") from exc
+        window = auto.WindowControl(searchDepth=1, Name="飞书")
+        if not window.Exists(3):
+            window = auto.WindowControl(searchDepth=1, Name="Lark")
+        if not window.Exists(3):
+            return False
+        window.SetActive()
+        time.sleep(1)
+        auto.SendKeys("{Ctrl}k")
+        time.sleep(0.5)
+        auto.SendKeys(group)
+        time.sleep(0.5)
+        auto.SendKeys("{Enter}")
+        time.sleep(2)
+        return True
+
+    def read_text_tree(self) -> str:
+        import uiautomation as auto
+        window = auto.GetForegroundControl()
+        lines = []
+
+        def walk(control, depth=0):
+            try:
+                name = control.Name
+                control_type = control.ControlTypeName
+            except Exception:
+                return
+            if name:
+                lines.append(f"{'  ' * depth}{control_type}: {name}")
+            for child in control.GetChildren():
+                walk(child, depth + 1)
+
+        walk(window)
+        return "\n".join(lines)
+
+    def click_go_answer_near_today(self, today: date) -> bool:
+        import uiautomation as auto
+        window = auto.GetForegroundControl()
+        candidates = []
+
+        def walk(control):
+            try:
+                name = control.Name or ""
+            except Exception:
+                return
+            if "前去答题" in name:
+                candidates.append(control)
+            for child in control.GetChildren():
+                walk(child)
+
+        walk(window)
+        if not candidates:
+            return False
+        candidates[0].Click()
+        time.sleep(3)
+        return True
+
+
+class WindowsBrowserClient:
+    def __init__(self, config: Config):
+        self.config = config
+
+    def wait_for_form(self) -> bool:
+        time.sleep(3)
+        return True
+
+    def submit(self, answer: str) -> bool:
+        return submit_answer_in_browser(self.config, answer)
+
+
+def run_all(config: Config, today=None, feishu=None, browser=None):
+    today = today or date.today()
+    feishu = feishu or WindowsFeishuClient(config)
+    browser = browser or WindowsBrowserClient(config)
+
+    if not feishu.activate_group(config.feishu_group):
+        log(config, "Could not activate Feishu group", "FATAL")
+        return EXIT_FATAL
+
+    text = feishu.read_text_tree()
+    answer = extract_answer_from_text(text, today, config.answer_search_window_chars)
+    if not answer:
+        log(config, "Answer not found yet")
+        return EXIT_ANSWER_NOT_FOUND
+    save_state(config.state_file, today, answer=answer, phase="answer_found")
+
+    if not feishu.click_go_answer_near_today(today):
+        log(config, "Could not click 前去答题", "ERROR")
+        return EXIT_RETRYABLE
+
+    if not browser.wait_for_form():
+        log(config, "Form did not open", "ERROR")
+        return EXIT_RETRYABLE
+    save_state(config.state_file, today, answer=answer, phase="form_opened")
+
+    if browser.submit(answer):
+        clear_state(config.state_file)
+        log(config, f"DONE! Answer: {answer}", "SUCCESS")
+        return EXIT_SUCCESS
+    log(config, "Submission failed", "ERROR")
+    return EXIT_RETRYABLE
+
+
 def main(argv=None):
     args = parse_args(argv)
     config_path = Path(args.config)
@@ -219,8 +330,42 @@ def main(argv=None):
         log(config, f"Preflight failed: {reason}", "FATAL")
         return EXIT_FATAL
 
-    log(config, "Windows implementation skeleton is ready; UI automation not executed yet")
-    return EXIT_RETRYABLE
+    today = date.today()
+    if args.dump_uia:
+        feishu = WindowsFeishuClient(config)
+        if not feishu.activate_group(config.feishu_group):
+            log(config, "Could not activate Feishu group", "FATAL")
+            return EXIT_FATAL
+        print(feishu.read_text_tree())
+        return EXIT_SUCCESS
+
+    if args.phase == "answer":
+        feishu = WindowsFeishuClient(config)
+        if not feishu.activate_group(config.feishu_group):
+            return EXIT_FATAL
+        answer = extract_answer_from_text(
+            feishu.read_text_tree(), today, config.answer_search_window_chars
+        )
+        if answer:
+            log(config, f"Found answer: {answer}", "SUCCESS")
+            return EXIT_SUCCESS
+        return EXIT_ANSWER_NOT_FOUND
+
+    if args.phase == "open-form":
+        feishu = WindowsFeishuClient(config)
+        if not feishu.activate_group(config.feishu_group):
+            return EXIT_FATAL
+        if not feishu.click_go_answer_near_today(today):
+            return EXIT_RETRYABLE
+        return EXIT_SUCCESS if WindowsBrowserClient(config).wait_for_form() else EXIT_RETRYABLE
+
+    if args.phase == "submit":
+        if not args.answer:
+            log(config, "--phase submit requires --answer", "FATAL")
+            return EXIT_FATAL
+        return EXIT_SUCCESS if WindowsBrowserClient(config).submit(args.answer) else EXIT_RETRYABLE
+
+    return run_all(config, today=today)
 
 
 if __name__ == "__main__":

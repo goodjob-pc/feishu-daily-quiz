@@ -149,5 +149,68 @@ class TestBrowserHelpers(unittest.TestCase):
         self.assertIn(".ud__tag", js)
 
 
+class FakeFeishuClient:
+    def __init__(self, text, clicked=True):
+        self.text = text
+        self.clicked = clicked
+
+    def activate_group(self, group):
+        return True
+
+    def read_text_tree(self):
+        return self.text
+
+    def click_go_answer_near_today(self, today):
+        return self.clicked
+
+
+class FakeBrowserClient:
+    def __init__(self, submitted=True):
+        self.submitted = submitted
+
+    def wait_for_form(self):
+        return True
+
+    def submit(self, answer):
+        return self.submitted
+
+
+class TestPhaseRunner(unittest.TestCase):
+    def _config(self, tmp):
+        return quiz.Config(
+            feishu_group="正泰安能户用光伏党支部",
+            deadline_hour=16,
+            browser="chrome",
+            browser_channel="chrome",
+            log_dir=Path(tmp) / "logs",
+            state_file=Path(tmp) / "state.json",
+            random_delay_seconds=60,
+            answer_search_window_chars=2000,
+            js_timeout_seconds=20,
+            form_url_marker="feishu.cn/share/base/form",
+        )
+
+    def test_run_all_success(self):
+        text = "每日一题 今日答案：C\n2026/06/23 每日一题来啦！"
+        with tempfile.TemporaryDirectory() as tmp:
+            code = quiz.run_all(
+                self._config(tmp),
+                today=date(2026, 6, 23),
+                feishu=FakeFeishuClient(text),
+                browser=FakeBrowserClient(True),
+            )
+            self.assertEqual(code, quiz.EXIT_SUCCESS)
+
+    def test_run_all_answer_not_found(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code = quiz.run_all(
+                self._config(tmp),
+                today=date(2026, 6, 23),
+                feishu=FakeFeishuClient("每日一题 今日答案：B"),
+                browser=FakeBrowserClient(True),
+            )
+            self.assertEqual(code, quiz.EXIT_ANSWER_NOT_FOUND)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
