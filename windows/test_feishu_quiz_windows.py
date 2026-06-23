@@ -212,5 +212,18 @@ class TestPhaseRunner(unittest.TestCase):
             self.assertEqual(code, quiz.EXIT_ANSWER_NOT_FOUND)
 
 
+class TestPowerShellWrappers(unittest.TestCase):
+    def test_scheduled_wrapper_handles_exit_codes(self):
+        script = Path(__file__).with_name("feishu_quiz_windows.ps1").read_text(encoding="utf-8")
+        self.assertIn("$LASTEXITCODE -eq 1", script)
+        self.assertIn("Start-Sleep -Seconds 1800", script)
+        self.assertIn("Start-Sleep -Seconds 60", script)
+
+    def test_manual_wrapper_has_no_random_delay(self):
+        script = Path(__file__).with_name("feishu_quiz_now_windows.ps1").read_text(encoding="utf-8")
+        self.assertNotIn("Get-Random", script)
+        self.assertIn("$args", script)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
